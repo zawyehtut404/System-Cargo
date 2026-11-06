@@ -7,7 +7,8 @@ A React cargo receipt system that preserves the existing 80mm receipt design and
 - Cargo shipment records and searchable recent history
 - Shipment status updates and payment ledger entries
 - Random public tracking links that expose status and route only
-- Local draft autosave, QR code, Code 128 barcode, and 80mm printing
+- A searchable local receipt archive, QR code with an optional uploaded logo, Code 128 barcode, and 80mm printing
+- Staff profiles and administrator-managed staff invitations
 
 ## Requirements
 
@@ -27,7 +28,7 @@ Receipt editing and printing work without Supabase. To enable authentication and
 1. Copy `.env.example` to `.env.local`.
 2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` using the project's URL and publishable/anon key from Supabase.
 3. Restart the Vite development server after changing environment variables.
-4. In the Supabase SQL Editor, run `supabase/migrations/20261106000000_phase1_cargo.sql`.
+4. In the Supabase SQL Editor, run `supabase/migrations/20261106000000_phase1_cargo.sql`, then `supabase/migrations/20261106000001_accounts_and_profiles.sql`.
 
 The publishable/anon key is intended for browser use. Never put a Supabase `service_role` or secret key in a `VITE_` variable or frontend source.
 
@@ -46,17 +47,15 @@ The migration creates a `MAIN` branch and an inactive staff profile when an Auth
    where p.id = u.id and b.code = 'MAIN';
    ```
 
-3. Invite staff in **Authentication → Users**, then activate each profile and assign its branch:
+3. Deploy the administrator-only invitation function:
 
-   ```sql
-   update public.profiles p
-   set is_active = true, branch_id = b.id
-   from public.branches b
-   join auth.users u on u.email = 'staff@example.com'
-   where p.id = u.id and b.code = 'MAIN';
+   ```bash
+   npx supabase functions deploy admin-invite-user
    ```
 
-The receipt editor and cargo history are shown only to signed-in staff with an active profile and assigned branch. Public tracking links remain accessible without signing in and show status and route only; they do not expose customer contact details or payment information, and do not link back to the staff app. The migration enables RLS on all cargo tables. Apply the migration and configure Supabase Auth before publishing the app.
+   The function uses Supabase's configured Auth Site URL for invite redirects; set the `APP_SITE_URL` function secret only if you need to override it. Supabase provides the service-role secret in the function's server-side runtime. Never add that secret to Vercel `VITE_` variables or client code. In the app, an administrator can use **Account → Invite an account**, then assign the new account a branch and activate it in the staff list. Supabase sends the invited user a secure password setup link.
+
+The receipt editor and cargo history are shown only to signed-in staff with an active profile and assigned branch. The **Account** page lets staff update their name, phone, and profile photo; administrators can invite and manage staff. Public tracking links remain accessible without signing in and show status and route only; they do not expose customer contact details or payment information, and do not link back to the staff app. Cargo history shows shipment creators, customer/contact details, payment history, status history, and public tracking actions only to authorized staff. The migration enables RLS on all cargo tables and restricts profile edits to safe fields.
 
 ## Deploy to Vercel
 
@@ -74,6 +73,8 @@ To create a PDF, choose **Save as PDF** in the print destination list.
 
 ## Notes
 
-- The receipt form autosaves locally; saving a cargo shipment to Supabase requires an active staff login.
+- Receipt edits are collected in **Local receipts** in this browser's local storage; loading a Supabase shipment into the editor does not replace the server record until **Update cargo** is selected.
+- The optional QR logo is stored only in this browser and embedded into generated QR images. Keep the uploaded logo under 200 KB; high QR error correction is enabled to preserve scan reliability.
+- Profile photos are stored in the `profile-avatars` Supabase Storage bucket created by the account migration.
 - Receipt currency totals remain editable, as in the original receipt generator. Recorded payments are checked against the outstanding MMK balance.
 - The QR code contains only the receipt number and route until a shipment is saved. After saving, it opens the privacy-limited public tracking page.

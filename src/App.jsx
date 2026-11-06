@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import JsBarcode from "jsbarcode";
-import { Printer, Plus, RotateCcw, Package, Settings2, Save, ClipboardList } from "lucide-react";
+import { Printer, Plus, RotateCcw, Package, Settings2, Save, ClipboardList, Archive, UserRound, Upload, X } from "lucide-react";
 import CargoHistory from "./components/CargoHistory.jsx";
 import LoginPanel from "./components/LoginPanel.jsx";
 import PublicTracking from "./components/PublicTracking.jsx";
+import LocalReceipts from "./components/LocalReceipts.jsx";
+import AccountPanel from "./components/AccountPanel.jsx";
 import { createShipment, updateShipment } from "./lib/cargo.js";
+import { readLocalReceipts, saveLocalReceipt } from "./lib/localReceipts.js";
 import { isSupabaseConfigured, supabase } from "./lib/supabase.js";
 
 const todayLocal = () => {
@@ -76,14 +79,16 @@ function SelectField({ label, value, onChange, options, disabled=false }) {
 export default function App() {
   const [initialForm] = useState(() => {
     try {
-      const saved = localStorage.getItem("cargo-receipt-form");
-      return { form: saved ? { ...defaultForm, ...JSON.parse(saved) } : { ...defaultForm }, error: "" };
+      const savedReceipts = readLocalReceipts();
+      const latest = savedReceipts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+      return { form: latest ? { ...defaultForm, ...latest.form } : { ...defaultForm }, localId: latest?.id || "", error: "" };
     } catch (error) {
       return {
         form: { ...defaultForm },
+        localId: "",
         error: error instanceof SyntaxError
-          ? "The saved local receipt was invalid. A fresh receipt has been loaded."
-          : `Unable to read the local draft: ${error instanceof Error ? error.message : "storage is unavailable."}`
+          ? "The local receipt archive was invalid. A fresh receipt has been loaded."
+          : `Unable to read local receipts: ${error instanceof Error ? error.message : "storage is unavailable."}`
       };
     }
   });
@@ -92,7 +97,12 @@ export default function App() {
     if (!initial.tracking) initial.tracking = makeTracking();
     return initial;
   });
+  const [localReceiptId, setLocalReceiptId] = useState(() => initialForm.localId || crypto.randomUUID());
   const [showSettings, setShowSettings] = useState(false);
+  const [qrLogo, setQrLogo] = useState(() => {
+    try { return localStorage.getItem("cargo-qr-logo") || ""; }
+    catch { return ""; }
+  });
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
@@ -111,13 +121,17 @@ export default function App() {
   }, [publicTrackingCode]);
 
   useEffect(() => {
+    if (publicTrackingCode) return;
     try {
-      localStorage.setItem("cargo-receipt-form", JSON.stringify(form));
+      saveLocalReceipt(form, localReceiptId, {
+        shipmentId: savedShipmentId,
+        trackingCode: savedTrackingCode
+      });
       if (!initialForm.error) setLocalError("");
     } catch (error) {
-      setLocalError(error instanceof Error ? `Unable to save the local draft: ${error.message}` : "Unable to save the local draft.");
+      setLocalError(error instanceof Error ? `Unable to save to the local receipt archive: ${error.message}` : "Unable to save to the local receipt archive.");
     }
-  }, [form]);
+  }, [form, initialForm.error, localReceiptId, publicTrackingCode, savedShipmentId, savedTrackingCode]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -184,6 +198,7 @@ export default function App() {
   const newReceipt = () => {
     if (!window.confirm("Start a new receipt? Unsaved edits are kept in this browser; saved cargo records remain in history.")) return;
     setForm({ ...defaultForm, tracking: makeTracking(), createdAt: todayLocal() });
+    setLocalReceiptId(crypto.randomUUID());
     setSavedShipmentId("");
     setSavedTrackingCode("");
     setSaveMessage("");
@@ -202,6 +217,39 @@ export default function App() {
       if (error) setAuthError(error.message);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Unable to sign out.");
+    }
+  };
+
+  const uploadQrLogo = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 200 * 1024) {
+      setLocalError("Choose a PNG, JPEG, or WebP logo smaller than 200 KB.");
+      return;
+    }
+    try {
+      const logoDataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Unable to read the selected logo."));
+        reader.readAsDataURL(file);
+      });
+      localStorage.setItem("cargo-qr-logo", logoDataUrl);
+      setQrLogo(logoDataUrl);
+      setLocalError("");
+    } catch (error) {
+      setLocalError(error instanceof Error ? `Unable to save the QR logo: ${error.message}` : "Unable to save the QR logo.");
+    }
+  };
+
+  const removeQrLogo = () => {
+    try {
+      localStorage.removeItem("cargo-qr-logo");
+      setQrLogo("");
+      setLocalError("");
+    } catch (error) {
+      setLocalError(error instanceof Error ? `Unable to remove the QR logo: ${error.message}` : "Unable to remove the QR logo.");
     }
   };
 
@@ -249,6 +297,7 @@ export default function App() {
     });
     setSavedShipmentId(shipment.id);
     setSavedTrackingCode(shipment.tracking_code);
+    setLocalReceiptId(`shipment-${shipment.id}`);
     setSaveMessage(`Loaded ${shipment.receipt_no} from cargo history.`);
     setSaveError("");
     setActiveView("receipt");
@@ -278,11 +327,15 @@ export default function App() {
         {hasActiveProfile && <>
           <button className={`btn ${activeView === "receipt" ? "primary" : "secondary"}`} onClick={() => setActiveView("receipt")}><Printer size={15}/> Receipt</button>
           <button className={`btn ${activeView === "history" ? "primary" : "secondary"}`} onClick={() => setActiveView("history")}><ClipboardList size={15}/> Cargo history</button>
+          <button className={`btn ${activeView === "archive" ? "primary" : "secondary"}`} onClick={() => setActiveView("archive")}><Archive size={15}/> Local receipts</button>
+          <button className={`btn ${activeView === "account" ? "primary" : "secondary"}`} onClick={() => setActiveView("account")}><UserRound size={15}/> Account</button>
         </>}
-        <button className="btn secondary" onClick={()=>setShowSettings(!showSettings)}><Settings2 size={16}/> Company</button>
-        <button className="btn secondary" onClick={newReceipt}><Plus size={16}/> New receipt</button>
-        <button className="btn primary" onClick={saveShipment} disabled={!isSupabaseConfigured || !hasActiveProfile || saving}><Save size={15}/> {saving ? "Saving…" : savedShipmentId ? "Update cargo" : "Save cargo"}</button>
-        <button className="btn primary" onClick={printReceipt}><Printer size={16}/> Print receipt</button>
+        {activeView === "receipt" && <>
+          <button className="btn secondary" onClick={()=>setShowSettings(!showSettings)}><Settings2 size={16}/> Company</button>
+          <button className="btn secondary" onClick={newReceipt}><Plus size={16}/> New receipt</button>
+          <button className="btn primary" onClick={saveShipment} disabled={!isSupabaseConfigured || !hasActiveProfile || saving}><Save size={15}/> {saving ? "Saving…" : savedShipmentId ? "Update cargo" : "Save cargo"}</button>
+          <button className="btn primary" onClick={printReceipt}><Printer size={16}/> Print receipt</button>
+        </>}
       </div>
     </header>
 
@@ -291,7 +344,18 @@ export default function App() {
       {session && profile && !profile.branch_id && <p className="form-error">This staff profile is not assigned to a branch. Ask an administrator to update it.</p>}
     </div>
 
-    {activeView === "history" && hasActiveProfile ? <main className="single-column no-print"><CargoHistory userId={session.user.id} onLoadReceipt={loadReceipt}/></main> : <main className="workspace">
+    {activeView === "history" && hasActiveProfile ? <main className="single-column no-print"><CargoHistory userId={session.user.id} onLoadReceipt={loadReceipt}/></main>
+      : activeView === "archive" && hasActiveProfile ? <main className="single-column no-print"><LocalReceipts onLoadReceipt={(savedForm, localId, shipmentId, trackingCode) => {
+        setForm({ ...defaultForm, ...savedForm });
+        setLocalReceiptId(localId);
+        setSavedShipmentId(shipmentId || (localId.startsWith("shipment-") ? localId.slice("shipment-".length) : ""));
+        setSavedTrackingCode(trackingCode || "");
+        setSaveMessage("Loaded local receipt.");
+        setSaveError("");
+        setActiveView("receipt");
+      }}/></main>
+      : activeView === "account" && hasActiveProfile ? <main className="single-column no-print"><AccountPanel session={session} profile={profile} onProfileChange={setProfile}/></main>
+      : <main className="workspace">
       <section className="editor no-print">
         <div className="section-heading"><div><h1>Receipt details</h1><p>Enter shipment information. The preview updates automatically.</p></div><span className="autosave">Saved in this browser</span></div>
         {(localError || saveError || saveMessage) && <div className={`notice ${saveError || localError ? "warning" : "success"}`}>{saveError || localError || saveMessage}</div>}
@@ -303,6 +367,14 @@ export default function App() {
             <Field label="Address" value={form.address} onChange={update("address")}/>
             <Field label="City / Country" value={form.city} onChange={update("city")}/>
             <Field label="Phone" value={form.phone} onChange={update("phone")}/>
+          </div>
+          <div className="qr-logo-control">
+            <div><strong>QR code logo</strong><small>PNG, JPEG, or WebP · up to 200 KB · saved in this browser</small></div>
+            <div className="qr-logo-actions">
+              {qrLogo && <img src={qrLogo} alt="Current QR logo"/>}
+              <label className="btn secondary"><Upload size={14}/>Upload logo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadQrLogo}/></label>
+              {qrLogo && <button className="btn secondary" onClick={removeQrLogo}><X size={14}/>Remove</button>}
+            </div>
           </div>
         </div>}
         <div className="panel">
@@ -369,7 +441,7 @@ export default function App() {
             <div className="tagline">{form.tagline}</div>
             <div className="company-address">{form.address}<br/>{form.city} · Ph: {form.phone}</div>
           </div>
-          <div className="qr-wrap"><QRCodeSVG value={qrPayload} size={112} level="M" includeMargin={false}/><div className="qr-hint">Scan to view shipment details</div></div>
+          <div className="qr-wrap"><QRCodeSVG value={qrPayload} size={112} level={qrLogo ? "H" : "M"} includeMargin={false} imageSettings={qrLogo ? { src: qrLogo, width: 26, height: 26, excavate: true } : undefined}/><div className="qr-hint">{savedTrackingCode ? "Scan to view public tracking" : "Save cargo to activate public tracking QR"}</div></div>
           <div className="tracking">{tracking}</div>
           <div className="route-grid">
             <div><b>ROUTE</b><span>{form.routeFrom} → {form.routeTo}</span></div>
