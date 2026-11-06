@@ -89,11 +89,18 @@ export async function updateShipment(form, shipmentId) {
 
 export async function getPublicShipment(trackingCode) {
   requireSupabase();
-  const { data, error } = await supabase.rpc("track_shipment", {
-    p_tracking_code: trackingCode
-  });
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    const { data, error } = await supabase.rpc("track_shipment", {
+      p_tracking_code: trackingCode
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError && /fetch/i.test(error.message)) {
+      throw new Error("Could not connect to shipment tracking. Check your internet connection and try again.");
+    }
+    throw error;
+  }
 }
 
 export async function recordPayment({ shipmentId, amount, currency, method, paidBy, note, userId }) {

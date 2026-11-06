@@ -146,3 +146,13 @@ footer{text-align:center;padding:20px;color:#8792a2;font-size:10px}
 @media(max-width:460px){
   .account-fields,.staff-edit-grid{grid-template-columns:1fr}.archive-actions{margin-left:0}.history-card-heading{flex-direction:column;gap:3px}.history-card-status{align-items:flex-start;flex-direction:column}.history-card-status span{text-align:left}
 }
+.tracking-brand{display:flex;align-items:center;gap:11px}.tracking-brand>div:last-child{display:flex;flex-direction:column;gap:4px}
+.tracking-company-logo,.receipt-company-logo{object-fit:contain}
+.tracking-company-logo{width:42px;height:42px;border-radius:9px;background:#fff;padding:3px;border:1px solid #e5e9f0}
+.receipt-company-logo{display:block;width:64px;height:48px;margin:0 auto 4px}
+.tracking-card .tracking-search{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:9px;margin:14px 0}
+.tracking-search .btn{min-height:36px}.tracking-receipt{font-family:"Roboto Mono","Courier New",monospace;font-size:19px;overflow-wrap:anywhere;margin:14px 0}
+.tracking-error{display:grid;gap:8px}.tracking-error .btn{justify-self:start}
+.branch-form{margin-bottom:12px}.branch-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:20px}
+.branch-card{display:grid;gap:4px;border:1px solid #e5e9f0;border-radius:8px;padding:10px}.branch-card strong{font-size:11px}.branch-card span{font-size:10px;color:#356da8;font-weight:700}.branch-card small{font-size:9px;color:#7b8798}
+@media(max-width:460px){.tracking-card .tracking-search{grid-template-columns:1fr}.tracking-search .btn{justify-content:center}.tracking-company-logo{width:36px;height:36px}}

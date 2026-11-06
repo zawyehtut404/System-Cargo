@@ -7,6 +7,7 @@ import LoginPanel from "./components/LoginPanel.jsx";
 import PublicTracking from "./components/PublicTracking.jsx";
 import LocalReceipts from "./components/LocalReceipts.jsx";
 import AccountPanel from "./components/AccountPanel.jsx";
+import { getCompanyLogo, uploadCompanyLogo } from "./lib/company.js";
 import { createShipment, updateShipment } from "./lib/cargo.js";
 import { readLocalReceipts, saveLocalReceipt } from "./lib/localReceipts.js";
 import { isSupabaseConfigured, supabase } from "./lib/supabase.js";
@@ -99,6 +100,9 @@ export default function App() {
   });
   const [localReceiptId, setLocalReceiptId] = useState(() => initialForm.localId || crypto.randomUUID());
   const [showSettings, setShowSettings] = useState(false);
+  const [companyLogo, setCompanyLogo] = useState("");
+  const [companyLogoLoading, setCompanyLogoLoading] = useState(false);
+  const [companyLogoError, setCompanyLogoError] = useState("");
   const [qrLogo, setQrLogo] = useState(() => {
     try { return localStorage.getItem("cargo-qr-logo") || ""; }
     catch { return ""; }
@@ -115,6 +119,14 @@ export default function App() {
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const publicTrackingCode = new URLSearchParams(window.location.search).get("track");
+
+  useEffect(() => {
+    let active = true;
+    getCompanyLogo()
+      .then((logo) => { if (active) setCompanyLogo(logo); })
+      .catch((error) => { if (active) setCompanyLogoError(error instanceof Error ? error.message : "Unable to load the company logo."); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     document.title = publicTrackingCode ? "Cargo Shipment Tracking" : "Cargo System";
@@ -253,6 +265,21 @@ export default function App() {
     }
   };
 
+  const changeCompanyLogo = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setCompanyLogoLoading(true);
+    setCompanyLogoError("");
+    try {
+      setCompanyLogo(await uploadCompanyLogo(file));
+    } catch (error) {
+      setCompanyLogoError(error instanceof Error ? error.message : "Unable to upload the company logo.");
+    } finally {
+      setCompanyLogoLoading(false);
+    }
+  };
+
   const saveShipment = async () => {
     setSaveMessage("");
     setSaveError("");
@@ -361,12 +388,21 @@ export default function App() {
         {(localError || saveError || saveMessage) && <div className={`notice ${saveError || localError ? "warning" : "success"}`}>{saveError || localError || saveMessage}</div>}
         {showSettings && <div className="panel">
           <h3>Company information</h3>
+          {companyLogoError && <p className="form-error">{companyLogoError}</p>}
           <div className="form-grid">
             <Field label="Company name" value={form.company} onChange={update("company")}/>
             <Field label="Tagline" value={form.tagline} onChange={update("tagline")}/>
             <Field label="Address" value={form.address} onChange={update("address")}/>
             <Field label="City / Country" value={form.city} onChange={update("city")}/>
             <Field label="Phone" value={form.phone} onChange={update("phone")}/>
+          </div>
+          <div className="qr-logo-control">
+            <div><strong>Company logo</strong><small>Shared with public tracking and receipt print · JPEG, PNG, or WebP under 2 MB</small></div>
+            <div className="qr-logo-actions">
+              {companyLogo && <img src={companyLogo} alt="Company logo"/>}
+              {profile.role === "admin" ? <label className="btn secondary"><Upload size={14}/>{companyLogoLoading ? "Uploading…" : "Upload company logo"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={changeCompanyLogo} disabled={companyLogoLoading}/></label>
+                : <span className="panel-subtitle">Ask an admin to update this logo.</span>}
+            </div>
           </div>
           <div className="qr-logo-control">
             <div><strong>QR code logo</strong><small>PNG, JPEG, or WebP · up to 200 KB · saved in this browser</small></div>
@@ -436,7 +472,7 @@ export default function App() {
         <div className="preview-heading no-print"><div><h2>Live preview</h2><p>80mm receipt layout</p></div><span className="paper-tag">80 mm</span></div>
         <article className="receipt" id="receipt">
           <div className="receipt-head">
-            <div className="logo-mark">✦</div>
+            {companyLogo ? <img className="receipt-company-logo" src={companyLogo} alt="Company logo"/> : <div className="logo-mark">✦</div>}
             <div className="company-name">{form.company || "CARGO COMPANY"}</div>
             <div className="tagline">{form.tagline}</div>
             <div className="company-address">{form.address}<br/>{form.city} · Ph: {form.phone}</div>

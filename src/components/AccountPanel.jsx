@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Camera, Mail, Shield, UserPlus } from "lucide-react";
+import { Building2, Camera, Mail, Shield, UserPlus } from "lucide-react";
 import { supabase } from "../lib/supabase.js";
 
 function messageFromError(error) {
@@ -21,6 +21,8 @@ export default function AccountPanel({ session, profile, onProfileChange }) {
   const [invite, setInvite] = useState({ email: "", fullName: "" });
   const [inviting, setInviting] = useState(false);
   const [savingStaffId, setSavingStaffId] = useState("");
+  const [branchDraft, setBranchDraft] = useState({ code: "", name: "", address: "", phone: "" });
+  const [creatingBranch, setCreatingBranch] = useState(false);
 
   useEffect(() => {
     setFullName(profile?.full_name || "");
@@ -48,7 +50,7 @@ export default function AccountPanel({ session, profile, onProfileChange }) {
   const loadStaff = useCallback(async () => {
     if (!supabase || profile?.role !== "admin") return;
     const [{ data: branchRows, error: branchError }, { data: staffRows, error: staffError }] = await Promise.all([
-      supabase.from("branches").select("id, code, name").order("name"),
+      supabase.from("branches").select("id, code, name, address, phone").order("name"),
       supabase.from("profiles").select("id, email, full_name, phone, role, branch_id, is_active").order("full_name")
     ]);
     if (branchError) throw new Error(branchError.message);
@@ -170,6 +172,35 @@ export default function AccountPanel({ session, profile, onProfileChange }) {
     }
   };
 
+  const createBranch = async (event) => {
+    event.preventDefault();
+    const branch = {
+      code: branchDraft.code.trim().toUpperCase(),
+      name: branchDraft.name.trim(),
+      address: branchDraft.address.trim() || null,
+      phone: branchDraft.phone.trim() || null,
+      is_active: true
+    };
+    if (!/^[A-Z0-9_-]{2,20}$/.test(branch.code)) {
+      setError("Branch code must be 2–20 letters, numbers, hyphens, or underscores.");
+      return;
+    }
+    setCreatingBranch(true);
+    setError("");
+    setMessage("");
+    try {
+      const { error: requestError } = await supabase.from("branches").insert(branch);
+      if (requestError) throw new Error(requestError.message);
+      setBranchDraft({ code: "", name: "", address: "", phone: "" });
+      setMessage(`Branch ${branch.code} created. You can now assign staff accounts to it.`);
+      await loadStaff();
+    } catch (requestError) {
+      setError(messageFromError(requestError));
+    } finally {
+      setCreatingBranch(false);
+    }
+  };
+
   return <section className="panel account-panel">
     <div className="panel-title">
       <div><h3>Account</h3><p className="panel-subtitle">Your staff profile and account settings.</p></div>
@@ -192,6 +223,20 @@ export default function AccountPanel({ session, profile, onProfileChange }) {
     </form>
 
     {profile?.role === "admin" && <div className="admin-accounts">
+      <h3>Branches</h3>
+      <form className="invite-form branch-form" onSubmit={createBranch}>
+        <div className="invite-heading"><Building2 size={17}/><strong>New branch</strong></div>
+        <div className="form-grid">
+          <label className="field"><span>Branch code</span><input required maxLength={20} placeholder="e.g. MDY" value={branchDraft.code} onChange={(event) => setBranchDraft({ ...branchDraft, code: event.target.value })}/></label>
+          <label className="field"><span>Branch name</span><input required maxLength={120} value={branchDraft.name} onChange={(event) => setBranchDraft({ ...branchDraft, name: event.target.value })}/></label>
+          <label className="field"><span>Address (optional)</span><input maxLength={240} value={branchDraft.address} onChange={(event) => setBranchDraft({ ...branchDraft, address: event.target.value })}/></label>
+          <label className="field"><span>Phone (optional)</span><input maxLength={40} value={branchDraft.phone} onChange={(event) => setBranchDraft({ ...branchDraft, phone: event.target.value })}/></label>
+        </div>
+        <button className="btn primary" type="submit" disabled={creatingBranch}><Building2 size={14}/>{creatingBranch ? "Creating…" : "Create branch"}</button>
+      </form>
+      <div className="branch-list">
+        {branches.map((branch) => <div className="branch-card" key={branch.id}><strong>{branch.name}</strong><span>{branch.code}</span><small>{branch.address || "No address"} · {branch.phone || "No phone"}</small></div>)}
+      </div>
       <h3>Staff accounts</h3>
       <form className="invite-form" onSubmit={inviteStaff}>
         <div className="invite-heading"><UserPlus size={17}/><strong>Invite an account</strong></div>

@@ -28,7 +28,7 @@ Receipt editing and printing work without Supabase. To enable authentication and
 1. Copy `.env.example` to `.env.local`.
 2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` using the project's URL and publishable/anon key from Supabase.
 3. Restart the Vite development server after changing environment variables.
-4. In the Supabase SQL Editor, run `supabase/migrations/20261106000000_phase1_cargo.sql`, then `supabase/migrations/20261106000001_accounts_and_profiles.sql`.
+4. In the Supabase SQL Editor, run `supabase/migrations/20261106000000_phase1_cargo.sql`, then `supabase/migrations/20261106000001_accounts_and_profiles.sql`, and finally `supabase/migrations/20261106000002_tracking_search_brand_branches.sql`.
 
 The publishable/anon key is intended for browser use. Never put a Supabase `service_role` or secret key in a `VITE_` variable or frontend source.
 
@@ -75,6 +75,8 @@ To create a PDF, choose **Save as PDF** in the print destination list.
 
 - Receipt edits are collected in **Local receipts** in this browser's local storage; loading a Supabase shipment into the editor does not replace the server record until **Update cargo** is selected.
 - The optional QR logo is stored only in this browser and embedded into generated QR images. Keep the uploaded logo under 200 KB; high QR error correction is enabled to preserve scan reliability.
+- The company logo is shared using the Supabase `company-assets` bucket, appears on printed receipts and public tracking, and can be changed by an administrator. The public tracking page accepts either the QR tracking code or the receipt number and exposes only status and route.
+- Administrators can add branches from **Account → New branch**, then assign staff accounts to them.
 - Profile photos are stored in the `profile-avatars` Supabase Storage bucket created by the account migration.
 - Receipt currency totals remain editable, as in the original receipt generator. Recorded payments are checked against the outstanding MMK balance.
 - The QR code contains only the receipt number and route until a shipment is saved. After saving, it opens the privacy-limited public tracking page.
