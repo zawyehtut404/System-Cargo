@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Package, RotateCcw } from "lucide-react";
+import { Package } from "lucide-react";
 import { getPublicShipment } from "../lib/cargo.js";
 import { isSupabaseConfigured } from "../lib/supabase.js";
 
@@ -60,9 +60,6 @@ export default function PublicTracking({ trackingCode }) {
           </li>)}
         </ol>
       </>}
-      <button className="btn secondary" onClick={() => window.location.assign("/")}>
-        <RotateCcw size={15} /> Open receipt generator
-      </button>
     </section>
     <p className="tracking-privacy">This tracking page shows shipment status only. Contact details and payment information are not public.</p>
   </main>;

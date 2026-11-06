@@ -107,6 +107,10 @@ export default function App() {
   const publicTrackingCode = new URLSearchParams(window.location.search).get("track");
 
   useEffect(() => {
+    document.title = publicTrackingCode ? "Cargo Shipment Tracking" : "Cargo System";
+  }, [publicTrackingCode]);
+
+  useEffect(() => {
     try {
       localStorage.setItem("cargo-receipt-form", JSON.stringify(form));
       if (!initialForm.error) setLocalError("");
@@ -251,6 +255,21 @@ export default function App() {
   };
 
   if (publicTrackingCode) return <PublicTracking trackingCode={publicTrackingCode} />;
+
+  if (!isSupabaseConfigured || !authReady || !session || !hasActiveProfile) {
+    return <div className="access-shell">
+      <header className="access-brand">
+        <div className="brand-icon"><Package size={22}/></div>
+        <strong>Cargo System</strong>
+      </header>
+      <main className="access-content">
+        <h1>Staff sign in</h1>
+        <p>Sign in with an authorized account to continue.</p>
+        <LoginPanel configured={isSupabaseConfigured} session={session} profile={profile} authReady={authReady} authError={authError} onLogin={signIn} onLogout={signOut}/>
+        {session && profile?.is_active && !profile.branch_id && <p className="form-error">This staff profile is not assigned to a branch. Ask an administrator to update it.</p>}
+      </main>
+    </div>;
+  }
 
   return <div className="app-shell">
     <header className="topbar no-print">

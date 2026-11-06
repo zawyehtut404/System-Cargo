@@ -21,8 +21,8 @@ export default function LoginPanel({ configured, session, profile, authReady, au
 
   if (!configured) {
     return <div className="notice warning">
-      <strong>Supabase is not connected.</strong>
-      <span>Receipt editing still works locally. Add the project URL and publishable/anon key to your environment to enable login, history, and public tracking.</span>
+      <strong>Sign-in is temporarily unavailable.</strong>
+      <span>Contact the system administrator.</span>
     </div>;
   }
 

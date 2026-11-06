@@ -3,6 +3,7 @@
 A React cargo receipt system that preserves the existing 80mm receipt design and adds:
 
 - Supabase email/password staff authentication
+- Receipt editor and cargo history restricted to active, signed-in staff
 - Cargo shipment records and searchable recent history
 - Shipment status updates and payment ledger entries
 - Random public tracking links that expose status and route only
@@ -55,7 +56,7 @@ The migration creates a `MAIN` branch and an inactive staff profile when an Auth
    where p.id = u.id and b.code = 'MAIN';
    ```
 
-The migration enables RLS on all cargo tables. Public tracking uses a separate random token and a restricted RPC; it does not expose customer contact details or payment information. Apply the migration and configure Supabase Auth before publishing the app.
+The receipt editor and cargo history are shown only to signed-in staff with an active profile and assigned branch. Public tracking links remain accessible without signing in and show status and route only; they do not expose customer contact details or payment information, and do not link back to the staff app. The migration enables RLS on all cargo tables. Apply the migration and configure Supabase Auth before publishing the app.
 
 ## Deploy to Vercel
 
