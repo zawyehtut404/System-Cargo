@@ -81,6 +81,19 @@ footer{text-align:center;padding:20px;color:#8792a2;font-size:10px}
 .history-actions{display:flex;flex-wrap:wrap;gap:4px 10px;min-width:190px}
 .history-actions .text-btn{margin:0;font-size:10px;padding:3px 0}
 .modal-backdrop{position:fixed;inset:0;background:#11182780;z-index:20;display:grid;place-items:center;padding:18px}
+.confirm-dialog{width:min(440px,100%);background:#fff;border:1px solid #e8ebf0;border-radius:16px;padding:24px;box-shadow:0 24px 70px #11182738;display:grid;grid-template-columns:42px 1fr;gap:14px;animation:dialog-enter .16s ease-out}
+.confirm-dialog-icon{width:42px;height:42px;border-radius:12px;background:#edf4fc;color:#285d92;display:grid;place-items:center}
+.confirm-dialog-icon.destructive{background:#fff1f0;color:#b43b35}
+.confirm-dialog-content h3{margin:2px 0 7px;font-size:15px;color:#1c2a3e}
+.confirm-dialog-content p{margin:0;color:#69768a;font-size:12px;line-height:1.55}
+.confirm-dialog .dialog-actions{grid-column:1/-1;margin-top:8px}
+.app-toast{position:fixed;right:24px;bottom:24px;z-index:15;width:min(440px,calc(100vw - 32px));display:flex;align-items:center;gap:12px;padding:14px 15px;border:1px solid #cfe7d6;border-radius:12px;background:#fff;color:#24683d;box-shadow:0 12px 36px #152d4f20;font-size:12px;line-height:1.45;animation:toast-enter .2s ease-out}
+.app-toast.error{border-color:#f0d2d0;color:#a12727}
+.app-toast>span{flex:1}
+.app-toast button{width:28px;height:28px;border:0;border-radius:7px;background:transparent;color:#738095;display:grid;place-items:center;cursor:pointer}
+.app-toast button:hover{background:#f1f4f8}
+@keyframes dialog-enter{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes toast-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .payment-dialog{width:min(440px,100%);background:#fff;border-radius:12px;padding:20px;box-shadow:0 16px 48px #0003;display:grid;gap:13px}
 .payment-dialog h3{margin:0;font-size:16px}
 .payment-dialog>p{margin:0;color:#6e7a8c;font-size:11px}

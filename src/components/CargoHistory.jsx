@@ -18,8 +18,8 @@ function formatMoney(value, currency) {
   return `${Number(value || 0).toLocaleString()} ${currency || "MMK"}`;
 }
 
-function trackingUrl(trackingCode) {
-  return `${window.location.origin}/?track=${encodeURIComponent(trackingCode)}`;
+function trackingUrl(receiptNo) {
+  return `${window.location.origin}/?track=${encodeURIComponent(receiptNo)}`;
 }
 
 function ActionButtons({ shipment, onDetails, onLoad, onPayment, onCopy }) {
@@ -27,8 +27,8 @@ function ActionButtons({ shipment, onDetails, onLoad, onPayment, onCopy }) {
     <button className="text-btn" onClick={() => onDetails(shipment)}><Eye size={14}/> Details</button>
     <button className="text-btn" onClick={() => onLoad(shipment)}><FileText size={14}/> Load</button>
     <button className="text-btn" onClick={() => onPayment(shipment)} disabled={shipment.payment_status === "paid"}>Add payment</button>
-    <a className="text-btn" href={trackingUrl(shipment.tracking_code)} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Open tracking</a>
-    <button className="text-btn" onClick={() => onCopy(shipment.tracking_code)}><Clipboard size={14}/> Copy link</button>
+    <a className="text-btn" href={trackingUrl(shipment.receipt_no)} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Open tracking</a>
+    <button className="text-btn" onClick={() => onCopy(shipment.receipt_no)}><Clipboard size={14}/> Copy link</button>
   </div>;
 }
 
@@ -153,9 +153,9 @@ export default function CargoHistory({ userId, onLoadReceipt }) {
     }
   };
 
-  const copyTrackingLink = async (trackingCode) => {
+  const copyTrackingLink = async (receiptNo) => {
     try {
-      await navigator.clipboard.writeText(trackingUrl(trackingCode));
+      await navigator.clipboard.writeText(trackingUrl(receiptNo));
       setNotice("Public tracking link copied.");
       window.setTimeout(() => setNotice(""), 3000);
     } catch (clipboardError) {
@@ -231,7 +231,7 @@ export default function CargoHistory({ userId, onLoadReceipt }) {
           ["Role", detailsTarget.creator?.role],
           ["Created at", new Date(detailsTarget.created_at).toLocaleString()],
           ["Tracking number", detailsTarget.receipt_no],
-          ["Public tracking URL", trackingUrl(detailsTarget.tracking_code)],
+          ["Public tracking URL", trackingUrl(detailsTarget.receipt_no)],
           ["Route", `${detailsTarget.route_from || "Origin"} → ${detailsTarget.route_to || "Destination"}`],
           ["Box size", detailsTarget.box_size],
           ["Weight", detailsTarget.weight_kg ? `${detailsTarget.weight_kg} kg` : "—"],
@@ -252,7 +252,7 @@ export default function CargoHistory({ userId, onLoadReceipt }) {
           <h4>Status history</h4>
           {detailsData.history.length === 0 ? <p>No status changes recorded.</p> : <ul>{detailsData.history.map((item, index) => <li key={`${item.created_at}-${index}`}>{statusOptions.find(([value]) => value === item.status)?.[1] || item.status} · {item.actor?.full_name || "Staff"} · {new Date(item.created_at).toLocaleString()}</li>)}</ul>}
         </section>
-        <div className="dialog-actions"><a className="btn secondary" href={trackingUrl(detailsTarget.tracking_code)} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Open public tracking</a><button className="btn primary" onClick={() => setDetailsTarget(null)}>Close</button></div>
+        <div className="dialog-actions"><a className="btn secondary" href={trackingUrl(detailsTarget.receipt_no)} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Open public tracking</a><button className="btn primary" onClick={() => setDetailsTarget(null)}>Close</button></div>
       </section>
     </div>}
     {paymentTarget && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPaymentTarget(null); }}>

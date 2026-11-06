@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, Search, Trash2 } from "lucide-react";
 import { deleteLocalReceipt, readLocalReceipts } from "../lib/localReceipts.js";
+import ConfirmDialog from "./ConfirmDialog.jsx";
 
 export default function LocalReceipts({ onLoadReceipt }) {
   const [receipts, setReceipts] = useState([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [receiptToDelete, setReceiptToDelete] = useState(null);
 
   const refresh = useCallback(() => {
     try {
@@ -26,11 +28,11 @@ export default function LocalReceipts({ onLoadReceipt }) {
     id, form?.senderName, form?.receiverName, form?.routeFrom, form?.routeTo
   ].join(" ").toLowerCase().includes(query.trim().toLowerCase())), [receipts, query]);
 
-  const removeReceipt = (id) => {
-    if (!window.confirm(`Delete local receipt ${id}? This does not delete a Supabase cargo record.`)) return;
+  const removeReceipt = () => {
     try {
-      deleteLocalReceipt(id);
+      deleteLocalReceipt(receiptToDelete.id);
       setError("");
+      setReceiptToDelete(null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to delete the local receipt.");
     }
@@ -52,9 +54,17 @@ export default function LocalReceipts({ onLoadReceipt }) {
         </div>
         <div className="archive-actions">
           <button className="btn secondary" onClick={() => onLoadReceipt(form, id, shipmentId, trackingCode)}>Load</button>
-          <button className="btn danger" aria-label={`Delete ${form?.tracking || id}`} onClick={() => removeReceipt(id)}><Trash2 size={14}/> Delete</button>
+          <button className="btn danger" aria-label={`Delete ${form?.tracking || id}`} onClick={() => setReceiptToDelete({ id, receiptNo: form?.tracking || id })}><Trash2 size={14}/> Delete</button>
         </div>
       </article>)}
     </div>}
+    {receiptToDelete && <ConfirmDialog
+      title="Delete local receipt?"
+      message={`Receipt ${receiptToDelete.receiptNo} will be removed from this browser. This does not delete any Supabase cargo record.`}
+      confirmLabel="Delete receipt"
+      destructive
+      onCancel={() => setReceiptToDelete(null)}
+      onConfirm={removeReceipt}
+    />}
   </section>;
 }

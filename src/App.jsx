@@ -1,12 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import JsBarcode from "jsbarcode";
-import { Printer, Plus, RotateCcw, Package, Settings2, Save, ClipboardList, Archive, UserRound, Upload, X } from "lucide-react";
+import { Printer, Plus, RotateCcw, Package, Settings2, Save, ClipboardList, Archive, UserRound, Upload, X, CheckCircle2, AlertCircle } from "lucide-react";
 import CargoHistory from "./components/CargoHistory.jsx";
 import LoginPanel from "./components/LoginPanel.jsx";
 import PublicTracking from "./components/PublicTracking.jsx";
 import LocalReceipts from "./components/LocalReceipts.jsx";
 import AccountPanel from "./components/AccountPanel.jsx";
+import ConfirmDialog from "./components/ConfirmDialog.jsx";
 import { getCompanyLogo, uploadCompanyLogo } from "./lib/company.js";
 import { createShipment, updateShipment } from "./lib/cargo.js";
 import { readLocalReceipts, saveLocalReceipt } from "./lib/localReceipts.js";
@@ -38,6 +39,8 @@ const defaultForm = {
   receiverAddress: "",
   receiverBranch: "YGN office",
   itemDescription: "",
+  declaredCurrency: "SGD",
+  localCurrency: "MMK",
   declaredValue: "1520.50",
   percentage: "4.00",
   subtotal: "60.82",
@@ -57,7 +60,19 @@ function makeTracking() {
   const rand = (n) => Math.floor(Math.random() * n);
   return `SG${String(Date.now()).slice(-4)}${chars[rand(chars.length)]}${chars[rand(chars.length)]}SG${String(rand(100000)).padStart(5,"0")}`;
 }
-const money = (v) => Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const currencies = [
+  ["MMK", "Myanmar Kyat"],
+  ["THB", "Thai Baht"],
+  ["MYR", "Malaysian Ringgit"],
+  ["SGD", "Singapore Dollar"],
+  ["JPY", "Japanese Yen"],
+  ["KRW", "South Korean Won"],
+  ["CNY", "Chinese Yuan"],
+  ["USD", "US Dollar"],
+  ["EUR", "Euro"],
+  ["GBP", "British Pound"]
+];
+const money = (v, currency) => `${currency} ${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function Barcode({ value }) {
   const ref = useRef(null);
@@ -74,7 +89,11 @@ function Field({ label, value, onChange, type="text", placeholder="", disabled=f
   return <label className="field"><span>{label}</span><input type={type} value={value ?? ""} placeholder={placeholder} disabled={disabled} onChange={(e)=>onChange(e.target.value)} /></label>;
 }
 function SelectField({ label, value, onChange, options, disabled=false }) {
-  return <label className="field"><span>{label}</span><select value={value} disabled={disabled} onChange={(e)=>onChange(e.target.value)}>{options.map(x=><option key={x}>{x}</option>)}</select></label>;
+  return <label className="field"><span>{label}</span><select value={value} disabled={disabled} onChange={(e)=>onChange(e.target.value)}>{options.map((option) => {
+    const optionValue = typeof option === "string" ? option : option.value;
+    const optionLabel = typeof option === "string" ? option : option.label;
+    return <option key={optionValue} value={optionValue}>{optionLabel}</option>;
+  })}</select></label>;
 }
 
 export default function App() {
@@ -118,7 +137,31 @@ export default function App() {
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+  const [confirmNewReceipt, setConfirmNewReceipt] = useState(false);
   const publicTrackingCode = new URLSearchParams(window.location.search).get("track");
+
+  const showToast = useCallback((message, error = false) => {
+    window.clearTimeout(toastTimer.current);
+    setToast({ message, error });
+    toastTimer.current = window.setTimeout(() => setToast(null), 4500);
+  }, []);
+
+  useEffect(() => {
+    const message = saveError || saveMessage;
+    if (message) showToast(message, Boolean(saveError));
+    else setToast(null);
+  }, [saveError, saveMessage, showToast]);
+
+  useEffect(() => {
+    const handleAfterPrint = () => showToast("Print dialog closed.");
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      window.removeEventListener("afterprint", handleAfterPrint);
+      window.clearTimeout(toastTimer.current);
+    };
+  }, [showToast]);
 
   useEffect(() => {
     let active = true;
@@ -200,15 +243,10 @@ export default function App() {
     setLocalError("");
   };
   const tracking = form.tracking.trim() || "SG0000CCGCSG00000";
-  const qrPayload = useMemo(() => savedTrackingCode
-    ? `${window.location.origin}/?track=${encodeURIComponent(savedTrackingCode)}`
-    : JSON.stringify({ trackingNumber: tracking, route: `${form.routeFrom} → ${form.routeTo}` }),
-  [savedTrackingCode, tracking, form.routeFrom, form.routeTo]);
   const hasActiveProfile = Boolean(session && profile?.is_active && profile.branch_id);
 
   const printReceipt = () => window.print();
   const newReceipt = () => {
-    if (!window.confirm("Start a new receipt? Unsaved edits are kept in this browser; saved cargo records remain in history.")) return;
     setForm({ ...defaultForm, tracking: makeTracking(), createdAt: todayLocal() });
     setLocalReceiptId(crypto.randomUUID());
     setSavedShipmentId("");
@@ -359,7 +397,7 @@ export default function App() {
         </>}
         {activeView === "receipt" && <>
           <button className="btn secondary" onClick={()=>setShowSettings(!showSettings)}><Settings2 size={16}/> Company</button>
-          <button className="btn secondary" onClick={newReceipt}><Plus size={16}/> New receipt</button>
+          <button className="btn secondary" onClick={() => setConfirmNewReceipt(true)}><Plus size={16}/> New receipt</button>
           <button className="btn primary" onClick={saveShipment} disabled={!isSupabaseConfigured || !hasActiveProfile || saving}><Save size={15}/> {saving ? "Saving…" : savedShipmentId ? "Update cargo" : "Save cargo"}</button>
           <button className="btn primary" onClick={printReceipt}><Printer size={16}/> Print receipt</button>
         </>}
@@ -385,7 +423,7 @@ export default function App() {
       : <main className="workspace">
       <section className="editor no-print">
         <div className="section-heading"><div><h1>Receipt details</h1><p>Enter shipment information. The preview updates automatically.</p></div><span className="autosave">Saved in this browser</span></div>
-        {(localError || saveError || saveMessage) && <div className={`notice ${saveError || localError ? "warning" : "success"}`}>{saveError || localError || saveMessage}</div>}
+        {localError && <div className="notice warning" role="alert">{localError}</div>}
         {showSettings && <div className="panel">
           <h3>Company information</h3>
           {companyLogoError && <p className="form-error">{companyLogoError}</p>}
@@ -443,18 +481,20 @@ export default function App() {
         <div className="panel">
           <h3>Items & charges</h3><div className="form-grid">
             <Field label="Item description" value={form.itemDescription} onChange={update("itemDescription")}/>
-            <Field label="Declared value (SGD)" value={form.declaredValue} onChange={update("declaredValue")}/>
+            <SelectField label="Charge currency" value={form.declaredCurrency} onChange={update("declaredCurrency")} options={currencies.map(([value, name]) => ({ value, label: `${value} — ${name}` }))} />
+            <Field label={`Declared value (${form.declaredCurrency})`} value={form.declaredValue} onChange={update("declaredValue")}/>
             <Field label="Percentage (%)" value={form.percentage} onChange={update("percentage")}/>
-            <Field label="Subtotal (SGD)" value={form.subtotal} onChange={update("subtotal")}/>
-            <Field label="Exchange rate (MMK)" value={form.exchangeRate} onChange={update("exchangeRate")}/>
-            <Field label="Total local (MMK)" value={form.totalLocal} onChange={update("totalLocal")}/>
+            <Field label={`Subtotal (${form.declaredCurrency})`} value={form.subtotal} onChange={update("subtotal")}/>
+            <SelectField label="Local currency" value={form.localCurrency} onChange={update("localCurrency")} options={currencies.map(([value, name]) => ({ value, label: `${value} — ${name}` }))} />
+            <Field label={`Exchange rate (${form.localCurrency})`} value={form.exchangeRate} onChange={update("exchangeRate")}/>
+            <Field label={`Total local (${form.localCurrency})`} value={form.totalLocal} onChange={update("totalLocal")}/>
           </div>
         </div>
         <div className="panel">
           <h3>Payment summary</h3><div className="form-grid">
             <SelectField label="Payment status" value={form.paymentStatus} onChange={update("paymentStatus")} options={["Paid in Full (Agent)","Paid in Full","Unpaid","COD","Partially Paid"]} disabled={Boolean(savedShipmentId)}/>
             <SelectField label="Paid by" value={form.paidBy} onChange={update("paidBy")} options={["Sender","Receiver","Agent","Company"]} disabled={Boolean(savedShipmentId)}/>
-            {form.paymentStatus === "Partially Paid" && <Field label="Initial amount paid (MMK)" type="number" value={form.amountPaid} onChange={update("amountPaid")} disabled={Boolean(savedShipmentId)}/>}
+            {form.paymentStatus === "Partially Paid" && <Field label={`Initial amount paid (${form.localCurrency})`} type="number" value={form.amountPaid} onChange={update("amountPaid")} disabled={Boolean(savedShipmentId)}/>}
             <Field label="COD amount / note" value={form.codAmount} onChange={update("codAmount")}/>
             <Field label="Payment method" value={form.paymentMethod} onChange={update("paymentMethod")} disabled={Boolean(savedShipmentId)}/>
             <Field label="Remarks" value={form.remarks} onChange={update("remarks")}/>
@@ -477,7 +517,7 @@ export default function App() {
             <div className="tagline">{form.tagline}</div>
             <div className="company-address">{form.address}<br/>{form.city} · Ph: {form.phone}</div>
           </div>
-          <div className="qr-wrap"><QRCodeSVG value={qrPayload} size={112} level={qrLogo ? "H" : "M"} includeMargin={false} imageSettings={qrLogo ? { src: qrLogo, width: 26, height: 26, excavate: true } : undefined}/><div className="qr-hint">{savedTrackingCode ? "Scan to view public tracking" : "Save cargo to activate public tracking QR"}</div></div>
+          <div className="qr-wrap"><QRCodeSVG value={tracking} size={112} level={qrLogo ? "H" : "M"} includeMargin={false} imageSettings={qrLogo ? { src: qrLogo, width: 26, height: 26, excavate: true } : undefined}/><div className="qr-hint">Scan to read receipt number</div></div>
           <div className="tracking">{tracking}</div>
           <div className="route-grid">
             <div><b>ROUTE</b><span>{form.routeFrom} → {form.routeTo}</span></div>
@@ -496,12 +536,12 @@ export default function App() {
           </section>
           <section className="receipt-section">
             <h4>ITEMS</h4>
-            <div className="item-line"><span>{form.itemDescription}<small>Value: ${money(form.declaredValue)} | Percentage @ {form.percentage}% of declared value</small></span><b>${money(form.subtotal)}</b></div>
-            <div className="total-line"><span>Subtotal</span><b>${money(form.subtotal)}</b></div>
+            <div className="item-line"><span>{form.itemDescription}<small>Value: {money(form.declaredValue, form.declaredCurrency)} | Percentage @ {form.percentage}% of declared value</small></span><b>{money(form.subtotal, form.declaredCurrency)}</b></div>
+            <div className="total-line"><span>Subtotal</span><b>{money(form.subtotal, form.declaredCurrency)}</b></div>
           </section>
-          <div className="grand-total"><b>Total Cost</b><strong>${money(form.subtotal)}</strong></div>
-          <div className="exchange"><span>Exchange Rate</span><b>1 SGD = {Number(form.exchangeRate||0).toLocaleString()} MMK</b></div>
-          <div className="exchange"><span>Total (Local)</span><b>{Number(form.totalLocal||0).toLocaleString()} MMK</b></div>
+          <div className="grand-total"><b>Total Cost</b><strong>{money(form.subtotal, form.declaredCurrency)}</strong></div>
+          <div className="exchange"><span>Exchange Rate</span><b>1 {form.declaredCurrency} = {Number(form.exchangeRate||0).toLocaleString()} {form.localCurrency}</b></div>
+          <div className="exchange"><span>Total (Local)</span><b>{money(form.totalLocal, form.localCurrency)}</b></div>
           <section className="receipt-section payment">
             <h4>PAYMENT SUMMARY</h4>
             <ReceiptRow label="Shipping Fee Payer" value={form.paidBy}/>
@@ -517,6 +557,24 @@ export default function App() {
       </section>
     </main>
     }
+    {toast && <div className={`app-toast${toast.error ? " error" : ""}`} role={toast.error ? "alert" : "status"}>
+      {toast.error ? <AlertCircle size={19}/> : <CheckCircle2 size={19}/>}
+      <span>{toast.message}</span>
+      <button aria-label="Dismiss notification" onClick={() => {
+        window.clearTimeout(toastTimer.current);
+        setToast(null);
+      }}><X size={16}/></button>
+    </div>}
+    {confirmNewReceipt && <ConfirmDialog
+      title="Start a new receipt?"
+      message="Your current edits are already saved in this browser. Saved cargo records will remain in cargo history."
+      confirmLabel="New receipt"
+      onCancel={() => setConfirmNewReceipt(false)}
+      onConfirm={() => {
+        newReceipt();
+        setConfirmNewReceipt(false);
+      }}
+    />}
     <footer className="no-print">Cargo Receipt Generator · Local drafts · Supabase cargo history when configured</footer>
   </div>;
 }
