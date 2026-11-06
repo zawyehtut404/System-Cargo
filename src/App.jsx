@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import JsBarcode from "jsbarcode";
-import { Printer, FileDown, Plus, RotateCcw, Package, Settings2 } from "lucide-react";
+import { Printer, Plus, RotateCcw, Package, Settings2, Save, ClipboardList } from "lucide-react";
+import CargoHistory from "./components/CargoHistory.jsx";
+import LoginPanel from "./components/LoginPanel.jsx";
+import PublicTracking from "./components/PublicTracking.jsx";
+import { createShipment, updateShipment } from "./lib/cargo.js";
+import { isSupabaseConfigured, supabase } from "./lib/supabase.js";
 
 const todayLocal = () => {
   const d = new Date();
@@ -35,6 +40,7 @@ const defaultForm = {
   exchangeRate: "3650",
   totalLocal: "221993",
   paymentStatus: "Paid in Full (Agent)",
+  amountPaid: "0",
   paidBy: "Sender",
   codAmount: "None - Fully paid by sender",
   paymentMethod: "Other",
@@ -60,55 +66,216 @@ function Barcode({ value }) {
   return <svg ref={ref} className="barcode" aria-label={`Barcode ${value}`} />;
 }
 
-function Field({ label, value, onChange, type="text", placeholder="" }) {
-  return <label className="field"><span>{label}</span><input type={type} value={value ?? ""} placeholder={placeholder} onChange={(e)=>onChange(e.target.value)} /></label>;
+function Field({ label, value, onChange, type="text", placeholder="", disabled=false }) {
+  return <label className="field"><span>{label}</span><input type={type} value={value ?? ""} placeholder={placeholder} disabled={disabled} onChange={(e)=>onChange(e.target.value)} /></label>;
 }
-function SelectField({ label, value, onChange, options }) {
-  return <label className="field"><span>{label}</span><select value={value} onChange={(e)=>onChange(e.target.value)}>{options.map(x=><option key={x}>{x}</option>)}</select></label>;
+function SelectField({ label, value, onChange, options, disabled=false }) {
+  return <label className="field"><span>{label}</span><select value={value} disabled={disabled} onChange={(e)=>onChange(e.target.value)}>{options.map(x=><option key={x}>{x}</option>)}</select></label>;
 }
 
 export default function App() {
+  const [initialForm] = useState(() => {
+    try {
+      const saved = localStorage.getItem("cargo-receipt-form");
+      return { form: saved ? { ...defaultForm, ...JSON.parse(saved) } : { ...defaultForm }, error: "" };
+    } catch (error) {
+      return {
+        form: { ...defaultForm },
+        error: error instanceof SyntaxError
+          ? "The saved local receipt was invalid. A fresh receipt has been loaded."
+          : `Unable to read the local draft: ${error instanceof Error ? error.message : "storage is unavailable."}`
+      };
+    }
+  });
   const [form, setForm] = useState(() => {
-    const saved = localStorage.getItem("cargo-receipt-form");
-    const initial = saved ? { ...defaultForm, ...JSON.parse(saved) } : { ...defaultForm };
+    const initial = initialForm.form;
     if (!initial.tracking) initial.tracking = makeTracking();
     return initial;
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
+  const [authError, setAuthError] = useState("");
+  const [localError, setLocalError] = useState(initialForm.error);
+  const [activeView, setActiveView] = useState("receipt");
+  const [savedShipmentId, setSavedShipmentId] = useState("");
+  const [savedTrackingCode, setSavedTrackingCode] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const publicTrackingCode = new URLSearchParams(window.location.search).get("track");
 
-  useEffect(() => localStorage.setItem("cargo-receipt-form", JSON.stringify(form)), [form]);
-  const update = (key) => (value) => setForm((f)=>({...f, [key]:value}));
+  useEffect(() => {
+    try {
+      localStorage.setItem("cargo-receipt-form", JSON.stringify(form));
+      if (!initialForm.error) setLocalError("");
+    } catch (error) {
+      setLocalError(error instanceof Error ? `Unable to save the local draft: ${error.message}` : "Unable to save the local draft.");
+    }
+  }, [form]);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let active = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setAuthError(error.message);
+      setSession(data?.session || null);
+      setAuthReady(true);
+    }).catch((error) => {
+      if (!active) return;
+      setAuthError(error instanceof Error ? error.message : "Unable to check the Supabase session.");
+      setAuthReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (active) {
+        setSession(nextSession);
+        setAuthError("");
+      }
+    });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !session) {
+      setProfile(null);
+      return undefined;
+    }
+    setProfile(null);
+    setAuthError("");
+    let active = true;
+    supabase.from("profiles")
+      .select("id, full_name, role, branch_id, is_active")
+      .eq("id", session.user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) setAuthError(error.message);
+        else setProfile(data);
+      })
+      .catch((error) => {
+        if (active) setAuthError(error instanceof Error ? error.message : "Unable to load the staff profile.");
+      });
+    return () => { active = false; };
+  }, [session]);
+
+  const update = (key) => (value) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setSaveMessage("");
+    setSaveError("");
+    setLocalError("");
+  };
   const tracking = form.tracking.trim() || "SG0000CCGCSG00000";
-  const qrPayload = useMemo(() => JSON.stringify({
-    trackingNumber: tracking,
-    route: `${form.routeFrom} → ${form.routeTo}`,
-    receiver: form.receiverName,
-    receiverPhone: form.receiverPhone,
-    receiverAddress: form.receiverAddress,
-    weight: form.weight,
-    status: form.paymentStatus
-  }), [tracking, form.routeFrom, form.routeTo, form.receiverName, form.receiverPhone, form.receiverAddress, form.weight, form.paymentStatus]);
+  const qrPayload = useMemo(() => savedTrackingCode
+    ? `${window.location.origin}/?track=${encodeURIComponent(savedTrackingCode)}`
+    : JSON.stringify({ trackingNumber: tracking, route: `${form.routeFrom} → ${form.routeTo}` }),
+  [savedTrackingCode, tracking, form.routeFrom, form.routeTo]);
+  const hasActiveProfile = Boolean(session && profile?.is_active && profile.branch_id);
 
   const printReceipt = () => window.print();
   const newReceipt = () => {
-    if (!window.confirm("Start a new receipt? The current receipt is saved in this browser only.")) return;
+    if (!window.confirm("Start a new receipt? Unsaved edits are kept in this browser; saved cargo records remain in history.")) return;
     setForm({ ...defaultForm, tracking: makeTracking(), createdAt: todayLocal() });
+    setSavedShipmentId("");
+    setSavedTrackingCode("");
+    setSaveMessage("");
+    setSaveError("");
+    setLocalError("");
   };
-  const exportPdf = () => window.print();
+
+  const signIn = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+  };
+
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) setAuthError(error.message);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Unable to sign out.");
+    }
+  };
+
+  const saveShipment = async () => {
+    setSaveMessage("");
+    setSaveError("");
+    if (!isSupabaseConfigured || !supabase) {
+      setSaveError("Supabase is not configured. Add the project URL and publishable/anon key first.");
+      return;
+    }
+    if (!hasActiveProfile) {
+      setSaveError("Sign in with an active staff account assigned to a branch before saving.");
+      return;
+    }
+    if (!form.tracking.trim()) {
+      setSaveError("A receipt number is required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = savedShipmentId
+        ? await updateShipment(form, savedShipmentId)
+        : await createShipment(form, profile.branch_id);
+      setSavedShipmentId(saved.id);
+      setSavedTrackingCode(saved.tracking_code);
+      setSaveMessage(`${savedShipmentId ? "Updated" : "Saved"} ${saved.receipt_no}. The receipt QR opens its public tracking page.`);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Unable to save this shipment.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const loadReceipt = (shipment) => {
+    const persisted = shipment.receipt_data || {};
+    const paymentStatus = shipment.payment_status === "paid"
+      ? "Paid in Full"
+      : shipment.payment_status === "partial" ? "Partially Paid" : "Unpaid";
+    setForm({
+      ...defaultForm,
+      ...persisted,
+      tracking: shipment.receipt_no,
+      paymentStatus,
+      amountPaid: String(shipment.amount_paid || 0)
+    });
+    setSavedShipmentId(shipment.id);
+    setSavedTrackingCode(shipment.tracking_code);
+    setSaveMessage(`Loaded ${shipment.receipt_no} from cargo history.`);
+    setSaveError("");
+    setActiveView("receipt");
+  };
+
+  if (publicTrackingCode) return <PublicTracking trackingCode={publicTrackingCode} />;
 
   return <div className="app-shell">
     <header className="topbar no-print">
       <div className="brand"><div className="brand-icon"><Package size={22}/></div><div><strong>Cargo Receipt Generator</strong><small>80mm thermal receipt · QR + Code 128</small></div></div>
       <div className="top-actions">
+        {hasActiveProfile && <>
+          <button className={`btn ${activeView === "receipt" ? "primary" : "secondary"}`} onClick={() => setActiveView("receipt")}><Printer size={15}/> Receipt</button>
+          <button className={`btn ${activeView === "history" ? "primary" : "secondary"}`} onClick={() => setActiveView("history")}><ClipboardList size={15}/> Cargo history</button>
+        </>}
         <button className="btn secondary" onClick={()=>setShowSettings(!showSettings)}><Settings2 size={16}/> Company</button>
         <button className="btn secondary" onClick={newReceipt}><Plus size={16}/> New receipt</button>
+        <button className="btn primary" onClick={saveShipment} disabled={!isSupabaseConfigured || !hasActiveProfile || saving}><Save size={15}/> {saving ? "Saving…" : savedShipmentId ? "Update cargo" : "Save cargo"}</button>
         <button className="btn primary" onClick={printReceipt}><Printer size={16}/> Print receipt</button>
       </div>
     </header>
 
-    <main className="workspace">
+    <div className="account-strip no-print">
+      <LoginPanel configured={isSupabaseConfigured} session={session} profile={profile} authReady={authReady} authError={authError} onLogin={signIn} onLogout={signOut}/>
+      {session && profile && !profile.branch_id && <p className="form-error">This staff profile is not assigned to a branch. Ask an administrator to update it.</p>}
+    </div>
+
+    {activeView === "history" && hasActiveProfile ? <main className="single-column no-print"><CargoHistory userId={session.user.id} onLoadReceipt={loadReceipt}/></main> : <main className="workspace">
       <section className="editor no-print">
         <div className="section-heading"><div><h1>Receipt details</h1><p>Enter shipment information. The preview updates automatically.</p></div><span className="autosave">Saved in this browser</span></div>
+        {(localError || saveError || saveMessage) && <div className={`notice ${saveError || localError ? "warning" : "success"}`}>{saveError || localError || saveMessage}</div>}
         {showSettings && <div className="panel">
           <h3>Company information</h3>
           <div className="form-grid">
@@ -158,15 +325,20 @@ export default function App() {
         </div>
         <div className="panel">
           <h3>Payment summary</h3><div className="form-grid">
-            <SelectField label="Payment status" value={form.paymentStatus} onChange={update("paymentStatus")} options={["Paid in Full (Agent)","Paid in Full","Unpaid","COD","Partially Paid"]}/>
-            <SelectField label="Paid by" value={form.paidBy} onChange={update("paidBy")} options={["Sender","Receiver","Agent","Company"]}/>
+            <SelectField label="Payment status" value={form.paymentStatus} onChange={update("paymentStatus")} options={["Paid in Full (Agent)","Paid in Full","Unpaid","COD","Partially Paid"]} disabled={Boolean(savedShipmentId)}/>
+            <SelectField label="Paid by" value={form.paidBy} onChange={update("paidBy")} options={["Sender","Receiver","Agent","Company"]} disabled={Boolean(savedShipmentId)}/>
+            {form.paymentStatus === "Partially Paid" && <Field label="Initial amount paid (MMK)" type="number" value={form.amountPaid} onChange={update("amountPaid")} disabled={Boolean(savedShipmentId)}/>}
             <Field label="COD amount / note" value={form.codAmount} onChange={update("codAmount")}/>
-            <Field label="Payment method" value={form.paymentMethod} onChange={update("paymentMethod")}/>
+            <Field label="Payment method" value={form.paymentMethod} onChange={update("paymentMethod")} disabled={Boolean(savedShipmentId)}/>
             <Field label="Remarks" value={form.remarks} onChange={update("remarks")}/>
           </div>
           <label className="field full"><span>Receipt notes</span><textarea rows="3" value={form.notes} onChange={e=>update("notes")(e.target.value)}/></label>
         </div>
-        <div className="editor-footer"><button className="btn primary wide" onClick={printReceipt}><Printer size={17}/> Print / Save as PDF</button><p>In the print dialog, select your 80mm thermal printer. To save a PDF, choose “Save as PDF”.</p></div>
+        <div className="editor-footer">
+          <button className="btn primary wide" onClick={saveShipment} disabled={!isSupabaseConfigured || !hasActiveProfile || saving}><Save size={16}/> {saving ? "Saving cargo…" : savedShipmentId ? "Update saved cargo" : "Save cargo to Supabase"}</button>
+          <button className="btn secondary wide" onClick={printReceipt}><Printer size={17}/> Print / Save as PDF</button>
+          <p>In the print dialog, select your 80mm thermal printer. To save a PDF, choose “Save as PDF”.</p>
+        </div>
       </section>
 
       <section className="preview-area">
@@ -217,7 +389,8 @@ export default function App() {
         </article>
       </section>
     </main>
-    <footer className="no-print">Cargo Receipt Generator · Local browser storage · No server required</footer>
+    }
+    <footer className="no-print">Cargo Receipt Generator · Local drafts · Supabase cargo history when configured</footer>
   </div>;
 }
 
