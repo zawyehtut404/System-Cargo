@@ -1,4 +1,5 @@
 import { supabase } from "./supabase.js";
+import { parseNumericValue } from "./currency.js";
 
 function requireSupabase() {
   if (!supabase) {
@@ -9,8 +10,8 @@ function requireSupabase() {
 function numericValue(value, label, { minimum = 0, emptyValue = 0 } = {}) {
   const text = String(value ?? "").trim();
   if (!text) return emptyValue;
-  const number = Number(text);
-  if (!Number.isFinite(number) || number < minimum) {
+  const number = parseNumericValue(text);
+  if (number === null || number < minimum) {
     throw new Error(`${label} must be a valid number greater than or equal to ${minimum}.`);
   }
   return number;

@@ -10,7 +10,7 @@ import AccountPanel from "./components/AccountPanel.jsx";
 import ConfirmDialog from "./components/ConfirmDialog.jsx";
 import { getCompanyLogo, uploadCompanyLogo } from "./lib/company.js";
 import { createShipment, updateShipment } from "./lib/cargo.js";
-import { calculateLocalTotal } from "./lib/currency.js";
+import { calculateLocalTotal, parseNumericValue } from "./lib/currency.js";
 import { publicTrackingUrl } from "./lib/tracking.js";
 import { readLocalReceipts, saveLocalReceipt } from "./lib/localReceipts.js";
 import { isSupabaseConfigured, supabase } from "./lib/supabase.js";
@@ -74,7 +74,12 @@ const currencies = [
   ["EUR", "Euro"],
   ["GBP", "British Pound"]
 ];
-const money = (v, currency) => `${currency} ${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (v, currency) => {
+  const value = parseNumericValue(v);
+  return value === null
+    ? `${currency} —`
+    : `${currency} ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 function Barcode({ value }) {
   const ref = useRef(null);
@@ -502,7 +507,7 @@ export default function App() {
             <Field label={`Subtotal (${form.declaredCurrency})`} value={form.subtotal} onChange={update("subtotal")}/>
             <SelectField label="Local currency" value={form.localCurrency} onChange={update("localCurrency")} options={currencies.map(([value, name]) => ({ value, label: `${value} — ${name}` }))} />
             <Field label={`Exchange rate (${form.localCurrency})`} value={form.exchangeRate} onChange={update("exchangeRate")}/>
-            <Field label={`Total local (${form.localCurrency})`} value={form.totalLocal} readOnly/>
+            <Field label={`Total local (${form.localCurrency})`} value={parseNumericValue(form.totalLocal)?.toLocaleString("en-US") || ""} readOnly/>
           </div>
         </div>
         <div className="panel">
@@ -555,7 +560,7 @@ export default function App() {
             <div className="total-line"><span>Subtotal</span><b>{money(form.subtotal, form.declaredCurrency)}</b></div>
           </section>
           <div className="grand-total"><b>Total Cost</b><strong>{money(form.subtotal, form.declaredCurrency)}</strong></div>
-          <div className="exchange"><span>Exchange Rate</span><b>1 {form.declaredCurrency} = {Number(form.exchangeRate||0).toLocaleString()} {form.localCurrency}</b></div>
+          <div className="exchange"><span>Exchange Rate</span><b>1 {form.declaredCurrency} = {parseNumericValue(form.exchangeRate)?.toLocaleString("en-US") || "—"} {form.localCurrency}</b></div>
           <div className="exchange"><span>Total (Local)</span><b>{money(form.totalLocal, form.localCurrency)}</b></div>
           <section className="receipt-section payment">
             <h4>PAYMENT SUMMARY</h4>

@@ -1,12 +1,18 @@
-export function calculateLocalTotal(subtotal, exchangeRate) {
-  const subtotalText = String(subtotal ?? "").trim();
-  const exchangeRateText = String(exchangeRate ?? "").trim();
-  if (!subtotalText || !exchangeRateText) return "";
+const numericPattern = /^[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d*)?|\.\d+)$/;
 
-  const subtotalValue = Number(subtotalText);
-  const exchangeRateValue = Number(exchangeRateText);
-  if (!Number.isFinite(subtotalValue) || subtotalValue < 0
-    || !Number.isFinite(exchangeRateValue) || exchangeRateValue <= 0) {
+export function parseNumericValue(value) {
+  const text = String(value ?? "").trim();
+  if (!text || !numericPattern.test(text)) return null;
+
+  const number = Number(text.replace(/,/g, ""));
+  return Number.isFinite(number) ? number : null;
+}
+
+export function calculateLocalTotal(subtotal, exchangeRate) {
+  const subtotalValue = parseNumericValue(subtotal);
+  const exchangeRateValue = parseNumericValue(exchangeRate);
+  if (subtotalValue === null || subtotalValue < 0
+    || exchangeRateValue === null || exchangeRateValue <= 0) {
     return "";
   }
 
