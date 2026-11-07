@@ -136,7 +136,7 @@ export default function AccountPanel({ session, profile, onProfileChange }) {
         }
         if (status === 404) {
           detail = "The admin-invite-user Edge Function is not deployed. Deploy it to this Supabase project, then retry.";
-        } else if (status === 401 || status === 403) {
+        } else if ((status === 401 || status === 403) && (!detail || detail === invokeError.message)) {
           detail = "The invitation request was rejected. Sign in again and confirm that this account is an active administrator.";
         }
         if (/failed to send|smtp|email provider/i.test(detail)) {

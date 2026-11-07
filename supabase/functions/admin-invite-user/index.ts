@@ -30,22 +30,29 @@ Deno.serve(async (request: Request) => {
   try {
     const token = authorization.slice("Bearer ".length);
     const userClient = createClient(supabaseUrl, anonKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: authorization } }
     });
     const { data: userData, error: userError } = await userClient.auth.getUser(token);
     if (userError || !userData.user) return respond(401, { error: "The sign-in session is invalid or expired." });
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
-    const { data: profile, error: profileError } = await adminClient
+    const { data: profile, error: profileError } = await userClient
       .from("profiles")
       .select("role, is_active")
       .eq("id", userData.user.id)
       .single();
-    if (profileError) return respond(403, { error: "Unable to verify administrator access." });
+    if (profileError) {
+      const errorCode = profileError.code ? ` (${profileError.code})` : "";
+      const hint = profileError.code === "PGRST116"
+        ? " No staff profile was found for this account in the connected Supabase project."
+        : " Confirm the account is active and the profile migrations are applied to the connected project.";
+      return respond(403, { error: `Unable to verify administrator access${errorCode}.${hint}` });
+    }
     if (profile.role !== "admin" || !profile.is_active) return respond(403, { error: "Active administrator access is required." });
 
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
     const body = await request.json();
     const email = String(body.email ?? "").trim().toLowerCase();
     const fullName = String(body.fullName ?? "").trim();

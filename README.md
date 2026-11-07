@@ -48,14 +48,14 @@ The migration creates a `MAIN` branch and an inactive staff profile when an Auth
    ```
 
 3. In Supabase **Authentication → URL Configuration**, set the Site URL to `https://system-cargo.vercel.app` and add it to the Redirect URLs list. For actual staff invitation delivery, configure a production SMTP provider in **Authentication → SMTP Settings**; Supabase's default email service is rate-limited and intended for testing.
-4. Deploy the administrator-only invitation function and configure its redirect:
+4. Deploy the administrator-only invitation function to the same project used by the app (`pjzfqbeujymcsvfknmvy`) and configure its redirect:
 
    ```bash
-   npx supabase functions deploy admin-invite-user
-   npx supabase secrets set APP_SITE_URL=https://system-cargo.vercel.app
+   npx supabase functions deploy admin-invite-user --project-ref pjzfqbeujymcsvfknmvy
+   npx supabase secrets set APP_SITE_URL=https://system-cargo.vercel.app --project-ref pjzfqbeujymcsvfknmvy
    ```
 
-   The function uses `APP_SITE_URL` for invite redirects. Supabase provides the service-role secret in the function's server-side runtime. Never add that secret to Vercel `VITE_` variables or client code. In the app, an administrator can use **Account → Invite an account**; the recipient follows the emailed link and sets their password in the app, then an admin assigns a branch and activates the staff profile. If an invitation request fails, check **Edge Functions → admin-invite-user → Logs** and **Authentication → Logs**; email delivery failures usually require fixing SMTP/provider configuration.
+   The function uses `APP_SITE_URL` for invite redirects. Supabase provides the service-role secret in the function's server-side runtime. Never add that secret to Vercel `VITE_` variables or client code. In the app, an administrator can use **Account → Invite an account**; the recipient follows the emailed link and sets their password in the app, then an admin assigns a branch and activates the staff profile. If an invitation request fails, check **Edge Functions → admin-invite-user → Logs** and **Authentication → Logs**; email delivery failures usually require fixing SMTP/provider configuration. The app is connected to project `pjzfqbeujymcsvfknmvy`; applying database changes or deploying the function to another Supabase project will not fix this app.
 
 The receipt editor and cargo history are shown only to signed-in staff with an active profile and assigned branch. The **Account** page lets staff update their name, phone, and profile photo; administrators can invite and manage staff. Public tracking links remain accessible without signing in and show status and route only; they do not expose customer contact details or payment information, and do not link back to the staff app. Cargo history shows shipment creators, customer/contact details, payment history, status history, and public tracking actions only to authorized staff. The migration enables RLS on all cargo tables and restricts profile edits to safe fields.
 
