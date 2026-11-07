@@ -97,7 +97,9 @@ export async function getPublicShipment(trackingCode) {
       if (error) throw new Error(error.message);
       return data;
     } catch (error) {
-      if (!(error instanceof TypeError && /fetch/i.test(error.message))) throw error;
+      const isNetworkError = error instanceof TypeError
+        && /fetch|load failed|network request failed|networkerror/i.test(error.message);
+      if (!isNetworkError) throw error;
       if (attempt === 1) {
         throw new Error("Could not connect to shipment tracking. Check Wi-Fi or mobile data, then try again.");
       }

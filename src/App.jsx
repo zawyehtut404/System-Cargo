@@ -11,6 +11,7 @@ import ConfirmDialog from "./components/ConfirmDialog.jsx";
 import { getCompanyLogo, uploadCompanyLogo } from "./lib/company.js";
 import { createShipment, updateShipment } from "./lib/cargo.js";
 import { calculateLocalTotal } from "./lib/currency.js";
+import { publicTrackingUrl } from "./lib/tracking.js";
 import { readLocalReceipts, saveLocalReceipt } from "./lib/localReceipts.js";
 import { isSupabaseConfigured, supabase } from "./lib/supabase.js";
 
@@ -531,7 +532,7 @@ export default function App() {
             <div className="tagline">{form.tagline}</div>
             <div className="company-address">{form.address}<br/>{form.city} · Ph: {form.phone}</div>
           </div>
-          <div className="qr-wrap"><QRCodeSVG value={tracking} size={112} level={qrLogo ? "H" : "M"} includeMargin={false} imageSettings={qrLogo ? { src: qrLogo, width: 26, height: 26, excavate: true } : undefined}/><div className="qr-hint">Scan to read receipt number</div></div>
+          <div className="qr-wrap"><QRCodeSVG value={publicTrackingUrl(tracking)} size={180} level={qrLogo ? "H" : "Q"} includeMargin imageSettings={qrLogo ? { src: qrLogo, width: 24, height: 24, excavate: true } : undefined}/><div className="qr-hint">Scan to open public shipment tracking</div></div>
           <div className="tracking">{tracking}</div>
           <div className="route-grid">
             <div><b>ROUTE</b><span>{form.routeFrom} → {form.routeTo}</span></div>

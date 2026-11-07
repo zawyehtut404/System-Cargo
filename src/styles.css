@@ -15,7 +15,7 @@ button,input,select,textarea{font:inherit}
 .preview-area{position:sticky;top:100px}.preview-heading{margin-bottom:14px}.paper-tag{color:#52647b;background:#e9edf3;font-weight:700}
 .receipt{width:302px;min-height:700px;background:#fff;margin:0 auto;padding:15px 13px 17px;box-shadow:0 8px 28px #1b2a3d18;color:#111;font-family:"Roboto Mono","Courier New",monospace;font-size:10px;line-height:1.28;overflow-wrap:anywhere}
 .receipt-head{text-align:center;border-bottom:1px solid #d9d9d9;padding-bottom:9px}.logo-mark{font-family:Arial,sans-serif;font-size:25px;color:#c52222;line-height:1}.company-name{font-family:Inter,Arial,sans-serif;font-size:23px;font-weight:800;letter-spacing:-1px;margin-top:1px}.tagline{font-family:Inter,Arial,sans-serif;font-size:7px;color:#b32121;font-weight:700}.company-address{font-size:8px;margin-top:7px;line-height:1.35}
-.qr-wrap{display:flex;flex-direction:column;align-items:center;padding:12px 0 7px}.qr-wrap svg{width:112px;height:112px}.qr-hint{font-family:Arial,sans-serif;font-size:8px;color:#666;margin-top:4px}
+.qr-wrap{display:flex;flex-direction:column;align-items:center;padding:12px 0 7px}.qr-wrap svg{width:144px;height:144px}.qr-hint{font-family:Arial,sans-serif;font-size:8px;color:#666;margin-top:4px}
 .tracking{text-align:center;font-size:19px;font-weight:700;letter-spacing:.4px;padding:9px 0;border-bottom:1px dashed #c9c9c9;white-space:normal;word-break:break-all}
 .route-grid{padding:8px 0;border-bottom:1px dashed #c9c9c9;display:grid;grid-template-columns:65px 1fr;gap:2px 8px}.route-grid div{display:contents}.route-grid b{font-weight:700}.route-grid span{font-weight:500}
 .receipt-section{padding:9px 0 7px;border-bottom:1px dashed #c9c9c9}.receipt-section h4{font-size:11px;margin:0 0 6px;font-weight:700}.receipt-row{display:grid;grid-template-columns:92px 1fr;gap:5px;min-height:13px}.receipt-row span{color:#333}.receipt-row b{font-weight:500;white-space:normal}.paid{color:#24814a!important}
@@ -35,7 +35,7 @@ footer{text-align:center;padding:20px;color:#8792a2;font-size:10px}
   #receipt{position:absolute!important;left:0!important;top:0!important;width:80mm!important;min-height:0!important;margin:0!important;padding:3mm 3mm 4mm!important;box-shadow:none!important;font-size:9pt!important;overflow:visible!important}
   #receipt .company-name{font-size:20pt!important}
   #receipt .tracking{font-size:15pt!important}
-  #receipt .qr-wrap svg{width:31mm!important;height:31mm!important}
+  #receipt .qr-wrap svg{width:34mm!important;height:34mm!important}
   #receipt .barcode{height:13mm!important}
   #receipt .receipt-section h4{font-size:9pt!important}
   #receipt .receipt-row{grid-template-columns:25mm 1fr!important}
