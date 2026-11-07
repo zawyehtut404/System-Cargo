@@ -53,11 +53,21 @@ Deno.serve(async (request: Request) => {
     if (!fullName || fullName.length > 120) return respond(400, { error: "Enter a name between 1 and 120 characters." });
 
     const appSiteUrl = Deno.env.get("APP_SITE_URL");
+    const requestedRedirect = typeof body.redirectTo === "string" ? body.redirectTo : "";
+    const allowedRedirects = new Set([
+      "https://system-cargo.vercel.app",
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ]);
+    const redirectTo = appSiteUrl || (allowedRedirects.has(requestedRedirect) ? requestedRedirect : "https://system-cargo.vercel.app");
     const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: { full_name: fullName },
-      ...(appSiteUrl ? { redirectTo: appSiteUrl } : {})
+      redirectTo
     });
-    if (inviteError) return respond(400, { error: inviteError.message });
+    if (inviteError) {
+      const status = /email|smtp|provider/i.test(inviteError.message) ? 502 : 400;
+      return respond(status, { error: inviteError.message });
+    }
     return respond(200, { invited: true, userId: invited.user.id });
   } catch (error) {
     return respond(400, { error: error instanceof Error ? error.message : "The account invitation request failed." });

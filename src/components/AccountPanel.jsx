@@ -121,15 +121,29 @@ export default function AccountPanel({ session, profile, onProfileChange }) {
     setMessage("");
     try {
       const { data, error: invokeError } = await supabase.functions.invoke("admin-invite-user", {
-        body: { email: invite.email, fullName: invite.fullName }
+        body: { email: invite.email, fullName: invite.fullName, redirectTo: window.location.origin }
       });
       if (invokeError) {
         let detail = invokeError.message;
+        const status = invokeError.context instanceof Response ? invokeError.context.status : 0;
         try {
-          const response = await invokeError.context?.json();
-          if (response?.error) detail = response.error;
+          const response = invokeError.context instanceof Response
+            ? await invokeError.context.json()
+            : null;
+          if (response?.error || response?.message) detail = response.error || response.message;
         } catch {
           // Keep the Functions client error when the response has no JSON body.
+        }
+        if (status === 404) {
+          detail = "The admin-invite-user Edge Function is not deployed. Deploy it to this Supabase project, then retry.";
+        } else if (status === 401 || status === 403) {
+          detail = "The invitation request was rejected. Sign in again and confirm that this account is an active administrator.";
+        }
+        if (/failed to send|smtp|email provider/i.test(detail)) {
+          detail = `Supabase could not send the invitation email: ${detail}. Check Authentication → SMTP Settings and the email provider logs.`;
+        }
+        if (/failed to send a request|failed to fetch|network|load failed/i.test(detail)) {
+          detail = "Could not reach the invitation service. Check the internet connection and confirm the admin-invite-user Edge Function is deployed.";
         }
         throw new Error(detail);
       }

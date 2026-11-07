@@ -136,6 +136,17 @@ export default function App() {
     catch { return ""; }
   });
   const [session, setSession] = useState(null);
+  const [passwordSetupRequired, setPasswordSetupRequired] = useState(() => {
+    const authType = new URLSearchParams(window.location.hash.slice(1)).get("type");
+    return authType === "invite"
+      || authType === "recovery"
+      || new URLSearchParams(window.location.search).has("code");
+  });
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSetupBusy, setPasswordSetupBusy] = useState(false);
+  const [passwordSetupError, setPasswordSetupError] = useState("");
+  const [passwordSetupMessage, setPasswordSetupMessage] = useState("");
   const [profile, setProfile] = useState(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [authError, setAuthError] = useState("");
@@ -210,10 +221,11 @@ export default function App() {
       setAuthError(error instanceof Error ? error.message : "Unable to check the Supabase session.");
       setAuthReady(true);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (active) {
         setSession(nextSession);
         setAuthError("");
+        if (event === "PASSWORD_RECOVERY") setPasswordSetupRequired(true);
       }
     });
     return () => {
@@ -282,6 +294,33 @@ export default function App() {
       if (error) setAuthError(error.message);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Unable to sign out.");
+    }
+  };
+
+  const setAccountPassword = async (event) => {
+    event.preventDefault();
+    setPasswordSetupError("");
+    setPasswordSetupMessage("");
+    if (newPassword.length < 8) {
+      setPasswordSetupError("Use a password with at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordSetupError("The passwords do not match.");
+      return;
+    }
+    setPasswordSetupBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw new Error(error.message);
+      setPasswordSetupRequired(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSetupMessage("Password set. Your administrator must activate your account and assign a branch before you can access the system.");
+    } catch (error) {
+      setPasswordSetupError(error instanceof Error ? error.message : "Unable to set your password. Open the latest invitation email and try again.");
+    } finally {
+      setPasswordSetupBusy(false);
     }
   };
 
@@ -385,6 +424,27 @@ export default function App() {
   };
 
   if (publicTrackingCode) return <PublicTracking trackingCode={publicTrackingCode} />;
+
+  if (passwordSetupRequired) {
+    return <div className="access-shell">
+      <header className="access-brand">
+        <div className="brand-icon"><Package size={22}/></div>
+        <strong>Cargo System</strong>
+      </header>
+      <main className="access-content">
+        <h1>Set your password</h1>
+        <p>Choose a password for your staff account.</p>
+        <form className="auth-card login-form" onSubmit={setAccountPassword}>
+          <label className="field"><span>New password</span><input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)}/></label>
+          <label className="field"><span>Confirm password</span><input type="password" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)}/></label>
+          <button className="btn primary" type="submit" disabled={!session || passwordSetupBusy}>{passwordSetupBusy ? "Saving password…" : "Set password"}</button>
+          {!session && <p className="form-error full">This invitation link is invalid or expired. Ask the administrator to send a new invitation.</p>}
+          {passwordSetupError && <p className="form-error full">{passwordSetupError}</p>}
+          {passwordSetupMessage && <p className="notice success">{passwordSetupMessage}</p>}
+        </form>
+      </main>
+    </div>;
+  }
 
   if (!isSupabaseConfigured || !authReady || !session || !hasActiveProfile) {
     return <div className="access-shell">
