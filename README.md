@@ -78,5 +78,5 @@ To create a PDF, choose **Save as PDF** in the print destination list.
 - The company logo is shared using the Supabase `company-assets` bucket, appears on printed receipts and public tracking, and can be changed by an administrator. The public tracking page accepts either a QR tracking code or receipt number and exposes only status and route. Printed QR codes encode only the receipt number so phone scanners read the receipt number directly. Use Cargo History's **Open tracking** action to open the public status page.
 - Administrators can add branches from **Account → New branch**, then assign staff accounts to them.
 - Profile photos are stored in the `profile-avatars` Supabase Storage bucket created by the account migration.
-- Receipt currency totals remain editable. Choose a charge currency and a local currency from MMK, THB, MYR, SGD, JPY, KRW, CNY, USD, EUR, or GBP. Recorded payments use the selected local currency.
+- Receipt currency totals remain editable. Choose a charge currency and a local currency from MMK, THB, MYR, SGD, JPY, KRW, CNY, USD, EUR, or GBP. The local total is calculated as the fee subtotal multiplied by the exchange rate; recorded payments use the selected local currency.
 - The QR code encodes only the receipt number, before and after saving.

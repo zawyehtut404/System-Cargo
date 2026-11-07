@@ -10,6 +10,7 @@ import AccountPanel from "./components/AccountPanel.jsx";
 import ConfirmDialog from "./components/ConfirmDialog.jsx";
 import { getCompanyLogo, uploadCompanyLogo } from "./lib/company.js";
 import { createShipment, updateShipment } from "./lib/cargo.js";
+import { calculateLocalTotal } from "./lib/currency.js";
 import { readLocalReceipts, saveLocalReceipt } from "./lib/localReceipts.js";
 import { isSupabaseConfigured, supabase } from "./lib/supabase.js";
 
@@ -85,8 +86,8 @@ function Barcode({ value }) {
   return <svg ref={ref} className="barcode" aria-label={`Barcode ${value}`} />;
 }
 
-function Field({ label, value, onChange, type="text", placeholder="", disabled=false }) {
-  return <label className="field"><span>{label}</span><input type={type} value={value ?? ""} placeholder={placeholder} disabled={disabled} onChange={(e)=>onChange(e.target.value)} /></label>;
+function Field({ label, value, onChange, type="text", placeholder="", disabled=false, readOnly=false }) {
+  return <label className="field"><span>{label}</span><input type={type} value={value ?? ""} placeholder={placeholder} disabled={disabled} readOnly={readOnly} onChange={(e)=>onChange(e.target.value)} /></label>;
 }
 function SelectField({ label, value, onChange, options, disabled=false }) {
   return <label className="field"><span>{label}</span><select value={value} disabled={disabled} onChange={(e)=>onChange(e.target.value)}>{options.map((option) => {
@@ -101,7 +102,9 @@ export default function App() {
     try {
       const savedReceipts = readLocalReceipts();
       const latest = savedReceipts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-      return { form: latest ? { ...defaultForm, ...latest.form } : { ...defaultForm }, localId: latest?.id || "", error: "" };
+      const form = latest ? { ...defaultForm, ...latest.form } : { ...defaultForm };
+      form.totalLocal = calculateLocalTotal(form.subtotal, form.exchangeRate);
+      return { form, localId: latest?.id || "", error: "" };
     } catch (error) {
       return {
         form: { ...defaultForm },
@@ -237,7 +240,13 @@ export default function App() {
   }, [session]);
 
   const update = (key) => (value) => {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "subtotal" || key === "exchangeRate") {
+        next.totalLocal = calculateLocalTotal(next.subtotal, next.exchangeRate);
+      }
+      return next;
+    });
     setSaveMessage("");
     setSaveError("");
     setLocalError("");
@@ -358,7 +367,8 @@ export default function App() {
       ...persisted,
       tracking: shipment.receipt_no,
       paymentStatus,
-      amountPaid: String(shipment.amount_paid || 0)
+      amountPaid: String(shipment.amount_paid || 0),
+      totalLocal: calculateLocalTotal(persisted.subtotal ?? shipment.fee_subtotal, persisted.exchangeRate ?? shipment.exchange_rate)
     });
     setSavedShipmentId(shipment.id);
     setSavedTrackingCode(shipment.tracking_code);
@@ -411,7 +421,11 @@ export default function App() {
 
     {activeView === "history" && hasActiveProfile ? <main className="single-column no-print"><CargoHistory userId={session.user.id} onLoadReceipt={loadReceipt}/></main>
       : activeView === "archive" && hasActiveProfile ? <main className="single-column no-print"><LocalReceipts onLoadReceipt={(savedForm, localId, shipmentId, trackingCode) => {
-        setForm({ ...defaultForm, ...savedForm });
+        setForm({
+          ...defaultForm,
+          ...savedForm,
+          totalLocal: calculateLocalTotal(savedForm.subtotal ?? defaultForm.subtotal, savedForm.exchangeRate ?? defaultForm.exchangeRate)
+        });
         setLocalReceiptId(localId);
         setSavedShipmentId(shipmentId || (localId.startsWith("shipment-") ? localId.slice("shipment-".length) : ""));
         setSavedTrackingCode(trackingCode || "");
@@ -487,7 +501,7 @@ export default function App() {
             <Field label={`Subtotal (${form.declaredCurrency})`} value={form.subtotal} onChange={update("subtotal")}/>
             <SelectField label="Local currency" value={form.localCurrency} onChange={update("localCurrency")} options={currencies.map(([value, name]) => ({ value, label: `${value} — ${name}` }))} />
             <Field label={`Exchange rate (${form.localCurrency})`} value={form.exchangeRate} onChange={update("exchangeRate")}/>
-            <Field label={`Total local (${form.localCurrency})`} value={form.totalLocal} onChange={update("totalLocal")}/>
+            <Field label={`Total local (${form.localCurrency})`} value={form.totalLocal} readOnly/>
           </div>
         </div>
         <div className="panel">

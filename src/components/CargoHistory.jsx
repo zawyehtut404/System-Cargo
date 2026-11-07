@@ -58,7 +58,7 @@ export default function CargoHistory({ userId, onLoadReceipt }) {
     try {
       const { data, error: requestError } = await supabase
         .from("cargo_shipments")
-        .select("id, receipt_no, tracking_code, cargo_status, payment_status, amount_paid, total_local, local_currency, created_at, updated_at, route_from, route_to, box_size, weight_kg, item_description, receipt_data, sender:customers!cargo_shipments_sender_id_fkey(full_name, phone, address), receiver:customers!cargo_shipments_receiver_id_fkey(full_name, phone, address), creator:profiles!cargo_shipments_created_by_fkey(id, full_name, email, role)")
+        .select("id, receipt_no, tracking_code, cargo_status, payment_status, amount_paid, fee_subtotal, exchange_rate, total_local, local_currency, created_at, updated_at, route_from, route_to, box_size, weight_kg, item_description, receipt_data, sender:customers!cargo_shipments_sender_id_fkey(full_name, phone, address), receiver:customers!cargo_shipments_receiver_id_fkey(full_name, phone, address), creator:profiles!cargo_shipments_created_by_fkey(id, full_name, email, role)")
         .order("created_at", { ascending: false })
         .limit(100);
       if (requestError) throw new Error(requestError.message);
